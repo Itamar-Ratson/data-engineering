@@ -1,0 +1,36 @@
+# ignore everything
+*
+
+# don't ignore the following:
+
+# folders
+!**/
+
+# except these folders
+venv/
+env/
+.terraform/
+
+# files
+!.gitignore
+!.myfuncs
+!Makefile
+!requirements.txt
+!Dockerfile
+!ci-cd-project.png
+!Jenkinsfile
+!guide
+
+# file types
+!*.sh
+!*.c
+!*.h
+!*.py
+!*.md
+!*.txt
+!*.html
+!*.yaml
+!*.yml
+!*.conf
+!*.tf
+!*.go
