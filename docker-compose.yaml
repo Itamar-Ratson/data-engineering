@@ -8,6 +8,48 @@ services:
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
 
+  datawarehouse:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: datauser
+      POSTGRES_PASSWORD: datapass
+      POSTGRES_DB: datawarehouse
+    ports:
+      - "5433:5432"
+    volumes:
+      - data-db-volume:/var/lib/postgresql/data
+
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    restart: always
+    ports:
+      - 9870:9870
+      - 9000:9000
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+    environment:
+      - CLUSTER_NAME=test
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - HDFS_CONF_dfs_webhdfs_enabled=true
+      - HDFS_CONF_dfs_permissions_enabled=false
+    env_file:
+      - ./hadoop.env
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    restart: always
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+      CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+    ports:
+      - "9864:9864"
+    env_file:
+      - ./hadoop.env
+
   airflow-init:
     build: .
     depends_on:
@@ -41,6 +83,10 @@ services:
     depends_on:
       airflow-init:
         condition: service_completed_successfully
+      namenode:
+        condition: service_started
+      datanode:
+        condition: service_started
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
@@ -60,6 +106,10 @@ services:
     depends_on:
       airflow-init:
         condition: service_completed_successfully
+      namenode:
+        condition: service_started
+      datanode:
+        condition: service_started
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
@@ -72,19 +122,8 @@ services:
       - ./data:/opt/airflow/data
     command: scheduler
 
-  hadoop:
-    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
-    environment:
-      - CLUSTER_NAME=test
-      - CORE_CONF_fs_defaultFS=hdfs://hadoop:9000
-      - HDFS_CONF_dfs_webhdfs_enabled=true
-    ports:
-      - "9870:9870"
-      - "9000:9000"
-    volumes:
-      - hadoop-data:/hadoop/dfs/name
-
 volumes:
   postgres-db-volume:
-  hadoop-data:
   data-db-volume:
+  hadoop_namenode:
+  hadoop_datanode:
