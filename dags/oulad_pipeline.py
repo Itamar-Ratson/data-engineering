@@ -3,7 +3,7 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
 import zipfile
 import os
-from hdfs3 import HDFileSystem
+import requests
 from pyspark.sql import SparkSession
 import psycopg2
 
@@ -19,17 +19,29 @@ def extract_and_load_to_hdfs(**context):
     with zipfile.ZipFile('/opt/airflow/data/oulad.zip', 'r') as zip_ref:
         zip_ref.extractall('/opt/airflow/data/extracted')
     
-    # Connect to HDFS
-    hdfs = HDFileSystem(host='hadoop', port=9000)
+    # Create directory in HDFS using WebHDFS
+    requests.put('http://hadoop:9870/webhdfs/v1/data/oulad?op=MKDIRS&user.name=root')
     
-    # Upload CSV files to HDFS
+    # Upload CSV files to HDFS using WebHDFS
     for root, dirs, files in os.walk('/opt/airflow/data/extracted'):
         for file in files:
             if file.endswith('.csv'):
                 local_path = os.path.join(root, file)
                 hdfs_path = f'/data/oulad/{file}'
-                hdfs.put(local_path, hdfs_path)
-                print(f"Uploaded {file} to HDFS")
+                
+                # First create the file
+                create_url = f'http://hadoop:9870/webhdfs/v1{hdfs_path}?op=CREATE&user.name=root&overwrite=true'
+                resp = requests.put(create_url, allow_redirects=False)
+                
+                if resp.status_code == 307:
+                    # Follow redirect to upload data
+                    upload_url = resp.headers['Location']
+                    with open(local_path, 'rb') as f:
+                        data = f.read()
+                    requests.put(upload_url, data=data)
+                    print(f"Uploaded {file} to HDFS")
+                else:
+                    print(f"Failed to create {file}: {resp.status_code}")
 
 def aggregate_data(**context):
     """Use PySpark to aggregate student data"""
